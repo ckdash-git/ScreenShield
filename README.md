@@ -192,13 +192,37 @@ ScreenShield/
 +-- Package.swift
 +-- README.md
 +-- Sources/
-    +-- ScreenShield/
-        +-- ScreenShield.swift          # Public exports and documentation
-        +-- ShieldView.swift            # Core UIKit implementation
-        +-- ScreenRecordingObserver.swift # Recording detection
-        +-- ScreenShieldView.swift      # SwiftUI wrapper
-        +-- ScreenShieldModifier.swift  # ViewModifier
+|   +-- ScreenShield/
+|       +-- ScreenShield.swift          # Public exports and documentation
+|       +-- ShieldView.swift            # Core UIKit implementation
+|       +-- ScreenRecordingObserver.swift # Recording detection
+|       +-- ScreenShieldView.swift      # SwiftUI wrapper
+|       +-- ScreenShieldModifier.swift  # ViewModifier
++-- Example/
+    +-- ScreenShieldDemo.xcodeproj      # Demo Xcode project
+    +-- ScreenShieldDemo/
+        +-- ScreenShieldDemoApp.swift   # App entry point
+        +-- ContentView.swift           # Demo UI
+        +-- Assets.xcassets/            # App assets
 ```
+
+## Example App
+
+The repository includes a demo app in the `Example/` folder that showcases all ScreenShield features:
+
+- **Protection Toggle**: Enable/disable protection in real-time
+- **Comparison View**: Side-by-side protected vs unprotected content
+- **Credit Card Demo**: Realistic sensitive data protection example
+- **Testing Instructions**: Step-by-step guide to verify protection
+
+### Running the Example
+
+1. Open `Example/ScreenShieldDemo.xcodeproj` in Xcode
+2. Select an iOS physical device
+3. Build and Run (Cmd + R)
+4. Take a screenshot to see protection in action
+
+> **Note**: Screenshot protection only works on physical iOS devices. The Simulator may not accurately reflect the protection behavior.
 
 ## API Reference
 
