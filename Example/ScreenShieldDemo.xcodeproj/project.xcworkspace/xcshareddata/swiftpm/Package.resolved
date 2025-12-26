@@ -1,0 +1,15 @@
+{
+  "originHash" : "2427477e5b8aa54900dc627d7d3e596c51c7bec61e6019e5a209565002069d77",
+  "pins" : [
+    {
+      "identity" : "screenshield",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ckdash-git/ScreenShield.git",
+      "state" : {
+        "revision" : "724b2511e92e803cd420369c7618cf9d5070eb20",
+        "version" : "1.0.0"
+      }
+    }
+  ],
+  "version" : 3
+}
