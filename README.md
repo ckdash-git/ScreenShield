@@ -30,13 +30,13 @@ Add ScreenShield to your project via Xcode:
 
 1. Go to **File > Add Package Dependencies...**
 2. Enter the repository URL: `https://github.com/ckdash-git/ScreenShield.git`
-3. Select **Up to Next Major Version** (e.g., `1.0.0`).
+3. Select **Up to Next Major Version** (e.g., `1.2.6`).
 
 Or add it to your `Package.swift` dependencies:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ckdash-git/ScreenShield.git", from: "1.0.0")
+    .package(url: "https://github.com/ckdash-git/ScreenShield.git", from: "1.2.6")
 ]
 ```
 
@@ -109,6 +109,8 @@ ScreenShieldView(isProtected: viewModel.isSecurityEnabled) {
 
 Wrap your sensitive views inside a `ShieldView`.
 
+#### Basic Usage (Frame-based)
+
 ```swift
 import UIKit
 import ScreenShield
@@ -120,19 +122,89 @@ class SecureViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // 1. Create the shield
+        // 1. Add the shield to your view
         shield.frame = view.bounds
+        shield.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(shield)
 
         // 2. Add sensitive content to the shield
         let secretLabel = UILabel()
         secretLabel.text = "Sensitive Data"
+        secretLabel.frame = CGRect(x: 20, y: 100, width: 200, height: 44)
         
-        // IMPORTANT: Add to shield, not view
+        // IMPORTANT: Add to shield's contentView, not directly to view
         shield.addProtectedContent(secretLabel) 
     }
+}
+```
+
+#### Auto Layout Usage
+
+```swift
+import UIKit
+import ScreenShield
+
+class SecureViewController: UIViewController {
     
-    // Example: Toggle protection programmatically
+    private let shield = ShieldView()
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        // 1. Setup shield with Auto Layout
+        shield.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(shield)
+        
+        NSLayoutConstraint.activate([
+            shield.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            shield.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            shield.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            shield.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        // 2. Add content with constraints
+        let secretLabel = UILabel()
+        secretLabel.text = "Protected Credit Card: 4242-4242-4242-4242"
+        secretLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        shield.addProtectedContent(secretLabel)
+        
+        // Constrain relative to shield's contentView
+        NSLayoutConstraint.activate([
+            secretLabel.centerXAnchor.constraint(equalTo: shield.contentView.centerXAnchor),
+            secretLabel.centerYAnchor.constraint(equalTo: shield.contentView.centerYAnchor)
+        ])
+    }
+}
+```
+
+#### Dynamic & Server-Controlled Protection (UIKit)
+
+Toggle protection programmatically based on server configuration:
+
+```swift
+class SecureViewController: UIViewController {
+    
+    private let shield = ShieldView()
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupShield()
+        
+        // Fetch server configuration
+        fetchServerConfig()
+    }
+    
+    private func fetchServerConfig() {
+        APIService.getSecurityConfig { [weak self] config in
+            DispatchQueue.main.async {
+                // Enable/disable based on server response
+                self?.shield.setProtected(config.screenshotProtectionEnabled)
+            }
+        }
+    }
+    
+    // Public method to toggle protection
     func updateSecurityState(enabled: Bool) {
         shield.setProtected(enabled)
     }
