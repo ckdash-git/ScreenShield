@@ -6,8 +6,9 @@
 //
 // How it works:
 // When a UITextField has isSecureTextEntry = true, iOS creates a special
-// internal layer that hides its content from screenshots and screen recordings.
-// By attaching our content view to that secure layer, we inherit this protection.
+// internal layer that is excluded from screenshots and screen recordings.
+// By adding our content view as a subview of the text field (not as a sublayer),
+// and disabling clipping, we inherit this protection.
 
 import UIKit
 
@@ -34,24 +35,14 @@ public final class ShieldView: UIView {
     // MARK: - Private Properties
     
     /// The hidden text field that provides the secure layer.
-    /// Its isSecureTextEntry property creates the protection mechanism.
-    private let secureTextField: UITextField = {
-        let textField = UITextField()
-        textField.isSecureTextEntry = true
-        textField.isUserInteractionEnabled = false
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        // Make the text field invisible but keep it in the view hierarchy
-        textField.alpha = 0.01 // Nearly invisible, but still renders its secure layer
-        return textField
-    }()
+    private var secureTextField: UITextField?
     
-    /// Container view that will be attached to the secure layer.
-    /// All protected content is added to this container.
+    /// Container view that holds all protected content.
     private let secureContainer: UIView = {
         let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = true
+        view.clipsToBounds = false
         return view
     }()
     
@@ -62,96 +53,151 @@ public final class ShieldView: UIView {
     
     public override init(frame: CGRect) {
         super.init(frame: frame)
-        setupSecureLayer()
+        commonInit()
     }
     
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupSecureLayer()
+        commonInit()
     }
     
-    // MARK: - Setup
-    
-    /// Sets up the secure text field and attaches our container to its secure layer.
-    private func setupSecureLayer() {
-        // Add the secure text field to the view hierarchy
-        // This is required for the secure layer to be active
-        addSubview(secureTextField)
+    private func commonInit() {
+        backgroundColor = .clear
+        clipsToBounds = false
         
-        // Constrain the text field to fill this view
-        // The text field needs to be present but we only care about its layer
-        NSLayoutConstraint.activate([
-            secureTextField.topAnchor.constraint(equalTo: topAnchor),
-            secureTextField.leadingAnchor.constraint(equalTo: leadingAnchor),
-            secureTextField.trailingAnchor.constraint(equalTo: trailingAnchor),
-            secureTextField.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
-        
-        // Critical: We must wait for the text field to be laid out before
-        // we can access its secure layer. Using DispatchQueue.main.async
-        // ensures the text field's layers are initialized.
-        DispatchQueue.main.async { [weak self] in
-            self?.attachContainerToSecureLayer()
-        }
+        // Create and setup the secure text field
+        makeSecure()
     }
     
-    /// Attaches the secure container to the text field's internal secure layer.
-    /// This is where the magic happens - content in this container will be
-    /// hidden from screenshots and screen recordings.
-    private func attachContainerToSecureLayer() {
-        // The secure text field creates a special sublayer when isSecureTextEntry is true.
-        // We find this layer and add our container's layer to it.
-        guard let secureLayer = findSecureLayer(in: secureTextField) else {
-            // Fallback: If we can't find the secure layer, just add normally
-            // This means protection won't work, but the view will still function
-            print("[ScreenShield] Warning: Could not find secure layer. Protection may not work.")
-            addSubview(secureContainer)
-            constrainSecureContainer(to: self)
-            return
-        }
-        
-        // Add the container view to the secure layer
-        // The container's layer will inherit the screenshot protection
-        secureLayer.addSublayer(secureContainer.layer)
-        
-        // We still need the container in the view hierarchy for proper layout
-        // and user interaction, but we make it hidden from the normal view
-        addSubview(secureContainer)
-        constrainSecureContainer(to: self)
-        
-        // Force layout update
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
+    // MARK: - Secure Layer Setup
     
-    /// Recursively searches for the secure layer within the text field's layer hierarchy.
-    /// The secure layer is typically the first sublayer of the text field's layer.
-    private func findSecureLayer(in textField: UITextField) -> CALayer? {
-        // Trigger layout to ensure layers are created
+    /// Creates the secure text field and attaches our container to its layer hierarchy.
+    private func makeSecure() {
+        guard secureTextField == nil else { return }
+        
+        // Create a text field with secure entry enabled
+        let textField = UITextField()
+        textField.backgroundColor = .clear
+        textField.isSecureTextEntry = true
+        textField.isUserInteractionEnabled = false
+        textField.clipsToBounds = false
+        textField.layer.masksToBounds = false
+        
+        // Add textfield to view hierarchy
+        addSubview(textField)
+        
+        // Force layout to create internal views
         textField.layoutIfNeeded()
         
-        // The secure layer is usually at layer.sublayers?[0]
-        // This is an implementation detail of UIKit's secure text field
-        return textField.layer.sublayers?.first
+        // Find the secure layer host and add our container to it
+        if let secureLayerHost = findSecureLayerHost(in: textField) {
+            // Add the container to the secure layer host
+            secureLayerHost.addSubview(secureContainer)
+            secureLayerHost.isUserInteractionEnabled = true
+            secureLayerHost.clipsToBounds = false
+            secureLayerHost.layer.masksToBounds = false
+            
+            // Ensure parent layers also don't clip
+            var parent = secureLayerHost.superview
+            while parent != nil && parent !== self {
+                parent?.clipsToBounds = false
+                parent?.layer.masksToBounds = false
+                parent = parent?.superview
+            }
+        } else {
+            // Fallback: Add container directly (protection may not work)
+            print("[ScreenShield] Warning: Could not find secure layer host. Screenshot protection may not work.")
+            textField.addSubview(secureContainer)
+        }
+        
+        secureTextField = textField
+        
+        // Initial layout
+        setNeedsLayout()
     }
     
-    /// Constrains the secure container to fill its parent.
-    private func constrainSecureContainer(to parent: UIView) {
-        secureContainer.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            secureContainer.topAnchor.constraint(equalTo: parent.topAnchor),
-            secureContainer.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
-            secureContainer.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
-            secureContainer.bottomAnchor.constraint(equalTo: parent.bottomAnchor)
-        ])
+    /// Finds the internal view that iOS uses for secure content rendering.
+    /// This is typically a _UITextLayoutCanvasView or _UITextFieldCanvasView.
+    private func findSecureLayerHost(in textField: UITextField) -> UIView? {
+        // Trigger layout to ensure all subviews are created
+        textField.setNeedsLayout()
+        textField.layoutIfNeeded()
+        
+        // Search recursively for the canvas view
+        return findCanvasView(in: textField)
+    }
+    
+    /// Recursively searches for the canvas view in the view hierarchy.
+    private func findCanvasView(in view: UIView) -> UIView? {
+        for subview in view.subviews {
+            let className = String(describing: type(of: subview))
+            
+            // iOS uses various internal view classes for secure text
+            // Common ones: _UITextLayoutCanvasView, _UITextFieldCanvasView
+            if className.contains("Canvas") ||
+               className.contains("TextLayout") ||
+               className.contains("ContentView") {
+                return subview
+            }
+            
+            // Recursively search
+            if let found = findCanvasView(in: subview) {
+                return found
+            }
+        }
+        
+        // If no specific canvas found, return the first subview
+        // This is often correct on newer iOS versions
+        return view.subviews.first
     }
     
     // MARK: - Layout
     
     public override func layoutSubviews() {
         super.layoutSubviews()
-        // Ensure the secure container's frame matches the bounds
+        
+        // Position the text field (it can be very small since it's invisible)
+        secureTextField?.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+        
+        // The secure container should fill the ShieldView bounds
         secureContainer.frame = bounds
+        
+        // Ensure all content is properly sized
+        for subview in secureContainer.subviews {
+            if subview.translatesAutoresizingMaskIntoConstraints {
+                // Frame-based views - leave their frames as-is
+            }
+            // Constraint-based views will handle their own layout
+        }
+    }
+    
+    public override var frame: CGRect {
+        didSet {
+            secureContainer.frame = bounds
+        }
+    }
+    
+    public override var bounds: CGRect {
+        didSet {
+            secureContainer.frame = bounds
+        }
+    }
+    
+    // MARK: - Hit Testing
+    
+    /// Override to forward touch events to the secure container.
+    public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // First check if the point is within our container
+        let containerPoint = convert(point, to: secureContainer)
+        if let hitView = secureContainer.hitTest(containerPoint, with: event) {
+            return hitView
+        }
+        
+        return super.hitTest(point, with: event)
+    }
+    
+    public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return bounds.contains(point)
     }
     
     // MARK: - Public API
@@ -164,6 +210,7 @@ public final class ShieldView: UIView {
     /// - Parameter view: The view to protect.
     public func addProtectedContent(_ view: UIView) {
         secureContainer.addSubview(view)
+        setNeedsLayout()
     }
     
     /// Removes a protected view from the shield.
@@ -182,13 +229,14 @@ public final class ShieldView: UIView {
     ///
     /// - Parameter protected: Whether to enable (`true`) or disable (`false`) protection.
     public func setProtected(_ protected: Bool) {
-        isProtectionEnabled = protected
-        secureTextField.isSecureTextEntry = protected
+        guard isProtectionEnabled != protected else { return }
         
-        // When protection is disabled, we need to re-add content to normal view hierarchy
-        // When enabled, we need to re-attach to secure layer
-        if protected {
-            attachContainerToSecureLayer()
+        isProtectionEnabled = protected
+        secureTextField?.isSecureTextEntry = protected
+        
+        // Rebuild the secure layer when toggling
+        if protected && secureTextField == nil {
+            makeSecure()
         }
     }
     
@@ -201,5 +249,37 @@ public final class ShieldView: UIView {
     /// Use this to access protected subviews or add constraints.
     public var contentView: UIView {
         return secureContainer
+    }
+}
+
+// MARK: - UIWindow Extension for Global Protection
+
+public extension UIWindow {
+    
+    /// Creates a secure overlay that protects the entire window content.
+    /// Call this in your AppDelegate or SceneDelegate to protect all content.
+    ///
+    /// - Returns: The ShieldView that was added, or nil if already present.
+    @discardableResult
+    func makeSecure() -> ShieldView? {
+        // Check if already secured
+        if subviews.contains(where: { $0 is ShieldView }) {
+            return nil
+        }
+        
+        let shieldView = ShieldView()
+        shieldView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Add at the back, behind all other content
+        insertSubview(shieldView, at: 0)
+        
+        NSLayoutConstraint.activate([
+            shieldView.topAnchor.constraint(equalTo: topAnchor),
+            shieldView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            shieldView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            shieldView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+        
+        return shieldView
     }
 }

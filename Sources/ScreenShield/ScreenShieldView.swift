@@ -49,36 +49,56 @@ public struct ScreenShieldView<Content: View>: UIViewRepresentable {
     
     // MARK: - UIViewRepresentable
     
-    public func makeUIView(context: Context) -> ShieldView {
-        let shieldView = ShieldView()
+    public func makeUIView(context: Context) -> UIView {
+        // Create container view to hold everything
+        let containerView = UIView()
+        containerView.backgroundColor = .clear
+        containerView.clipsToBounds = false
         
-        // Create a hosting controller for the SwiftUI content
+        // Create ShieldView
+        let shieldView = ShieldView()
+        shieldView.translatesAutoresizingMaskIntoConstraints = false
+        shieldView.clipsToBounds = false
+        containerView.addSubview(shieldView)
+        
+        // Create hosting controller for SwiftUI content
         let hostingController = UIHostingController(rootView: content)
         hostingController.view.backgroundColor = .clear
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         
-        // Store the hosting controller in the coordinator to prevent deallocation
+        // Store references in coordinator
+        context.coordinator.shieldView = shieldView
         context.coordinator.hostingController = hostingController
         
-        // Add the hosting controller's view to the shield
+        // Add hosting view to shield's content view
         shieldView.addProtectedContent(hostingController.view)
         
-        // Constrain the hosting view to fill the shield's content view
+        // Setup constraints
         NSLayoutConstraint.activate([
+            // Shield fills container
+            shieldView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            shieldView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            shieldView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            shieldView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            
+            // Hosting view fills shield's content view
             hostingController.view.topAnchor.constraint(equalTo: shieldView.contentView.topAnchor),
             hostingController.view.leadingAnchor.constraint(equalTo: shieldView.contentView.leadingAnchor),
             hostingController.view.trailingAnchor.constraint(equalTo: shieldView.contentView.trailingAnchor),
             hostingController.view.bottomAnchor.constraint(equalTo: shieldView.contentView.bottomAnchor)
         ])
         
-        return shieldView
+        // Set initial protection state
+        shieldView.setProtected(isProtected)
+        
+        return containerView
     }
     
-    public func updateUIView(_ uiView: ShieldView, context: Context) {
-        // Update protection state if it changed
-        uiView.setProtected(isProtected)
+    public func updateUIView(_ uiView: UIView, context: Context) {
+        // Update protection state
+        context.coordinator.shieldView?.setProtected(isProtected)
         
-        // Update the hosted SwiftUI content
+        // Update SwiftUI content
         context.coordinator.hostingController?.rootView = content
     }
     
@@ -88,9 +108,9 @@ public struct ScreenShieldView<Content: View>: UIViewRepresentable {
     
     // MARK: - Coordinator
     
-    /// Coordinator that holds a reference to the hosting controller.
+    /// Coordinator that holds references to UIKit views.
     public class Coordinator {
-        /// The hosting controller for the SwiftUI content.
+        var shieldView: ShieldView?
         var hostingController: UIHostingController<Content>?
     }
 }
