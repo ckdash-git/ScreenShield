@@ -1,32 +1,38 @@
 # ScreenShield
 
-A lightweight Swift package to protect sensitive content from screenshots and screen recordings in iOS applications.
+![Swift](https://img.shields.io/badge/Swift-5.5+-orange.svg)
+![iOS](https://img.shields.io/badge/iOS-13.0+-blue.svg)
+![Swift Package Manager](https://img.shields.io/badge/SPM-compatible-green.svg)
+![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)
 
-## Overview
+**The missing privacy layer for iOS applications.**
 
-ScreenShield uses an architectural workaround based on `UITextField`'s `isSecureTextEntry` property to hide sensitive content from screenshots and screen recordings. When protection is enabled, the content appears blank (or blurred for screen recordings) in captured media.
+ScreenShield is a production-ready Swift Package that prevents sensitive content from being captured in screenshots or screen recordings. It provides a modular, drop-in solution for both **SwiftUI** and **UIKit**, eliminating the need to rewrite complex security logic for every project.
 
-## Requirements
+---
 
-- iOS 13.0+
-- Swift 5.9+
-- Xcode 15.0+
+## Features
+
+- **Screenshot Prevention**: Content rendered inside ScreenShield becomes invisible (black/white) in system screenshots.
+- **Recording Protection**: Content is automatically hidden during screen recording or AirPlay mirroring.
+- **Dynamic Control**: Toggle protection on or off dynamically (e.g., via server-side configuration).
+- **Privacy Blur**: Optional utility to automatically blur views when screen recording is detected.
+- **Modular Design**: Zero dependencies; install via Swift Package Manager.
+- **SwiftUI & UIKit**: First-class support for both frameworks.
+
+---
 
 ## Installation
 
 ### Swift Package Manager
 
-Add ScreenShield to your project using Xcode:
+Add ScreenShield to your project via Xcode:
 
 1. Go to **File > Add Package Dependencies...**
-2. Enter the repository URL:
-   ```
-   https://github.com/ckdash-git/ScreenShield.git
-   ```
-3. Select the version rule (e.g., "Up to Next Major Version")
-4. Click **Add Package**
+2. Enter the repository URL: `https://github.com/ckdash-git/ScreenShield.git`
+3. Select **Up to Next Major Version** (e.g., `1.0.0`).
 
-Or add it manually to your `Package.swift`:
+Or add it to your `Package.swift` dependencies:
 
 ```swift
 dependencies: [
@@ -34,177 +40,189 @@ dependencies: [
 ]
 ```
 
-Then add `ScreenShield` to your target's dependencies:
-
-```swift
-.target(
-    name: "YourApp",
-    dependencies: ["ScreenShield"]
-)
-```
+---
 
 ## Usage
 
 ### SwiftUI
 
-The simplest way to protect content in SwiftUI is using the `.protectScreenshot()` modifier:
+The easiest way to protect content is using the `.protectScreenshot()` view modifier.
 
 ```swift
+import SwiftUI
 import ScreenShield
 
-struct ContentView: View {
+struct SecureView: View {
     var body: some View {
         VStack {
-            Text("Public Information")
-            
-            Text("Secret: ABC-123-XYZ")
+            // This is visible in screenshots
+            Text("Public Header")
+
+            // This is HIDDEN in screenshots
+            Text("Your Secret API Key: 12345")
                 .protectScreenshot()
         }
     }
 }
 ```
 
-You can also conditionally enable protection:
+### Dynamic & Server-Controlled Protection
+
+You can enable or disable protection dynamically based on your app's state or a remote configuration (e.g., a server response). This is useful if you want to control security features via a backend flag.
+
+ScreenShield supports initialization with a boolean state:
 
 ```swift
-Text("Sensitive Data")
-    .protectScreenshot(when: userSettings.hideInScreenshots)
+public init(isProtected: Bool = true)
 ```
 
-For wrapping multiple views, use `ScreenShieldView`:
+**Usage Example:**
 
 ```swift
-ScreenShieldView {
-    VStack {
-        Image(systemName: "creditcard.fill")
-        Text("Card Number: 4242-4242-4242-4242")
-        Text("CVV: 123")
+// Example: Toggling protection based on a server response
+struct UserProfileView: View {
+    // This boolean could come from your backend API
+    let serverConfigAllowScreenshots: Bool 
+    
+    var body: some View {
+        VStack {
+            Text("Sensitive User Data")
+                // Pass the server response state to control protection
+                // If the server says "allow", we pass false (enabled = false)
+                .protectScreenshot(!serverConfigAllowScreenshots)
+        }
     }
 }
 ```
 
-### UIKit
-
-Create a `ShieldView` and add your sensitive content to it:
+Or using the `ScreenShieldView` wrapper explicitly:
 
 ```swift
+ScreenShieldView(isProtected: viewModel.isSecurityEnabled) {
+    SensitiveChart()
+}
+```
+
+---
+
+### UIKit
+
+Wrap your sensitive views inside a `ShieldView`.
+
+```swift
+import UIKit
 import ScreenShield
 
 class SecureViewController: UIViewController {
     
-    private let shieldView = ShieldView()
+    private let shield = ShieldView()
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // Add the shield view to your hierarchy
-        view.addSubview(shieldView)
-        shieldView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            shieldView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            shieldView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            shieldView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            shieldView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-        
-        // Add protected content
+
+        // 1. Create the shield
+        shield.frame = view.bounds
+        view.addSubview(shield)
+
+        // 2. Add sensitive content to the shield
         let secretLabel = UILabel()
-        secretLabel.text = "Secret Information"
-        secretLabel.translatesAutoresizingMaskIntoConstraints = false
+        secretLabel.text = "Sensitive Data"
         
-        shieldView.addProtectedContent(secretLabel)
-        
-        // Constrain the label within the shield's content view
-        NSLayoutConstraint.activate([
-            secretLabel.centerXAnchor.constraint(equalTo: shieldView.contentView.centerXAnchor),
-            secretLabel.centerYAnchor.constraint(equalTo: shieldView.contentView.centerYAnchor)
-        ])
+        // IMPORTANT: Add to shield, not view
+        shield.addProtectedContent(secretLabel) 
+    }
+    
+    // Example: Toggle protection programmatically
+    func updateSecurityState(enabled: Bool) {
+        shield.setProtected(enabled)
     }
 }
 ```
 
-### Screen Recording Detection
+---
 
-As a backup protection mechanism, you can detect screen recording and apply a blur:
+### Screen Recording Blur (Backup Layer)
+
+While the core protection hides content, you may also want to blur the entire view when a user starts recording the screen or mirroring to a TV.
 
 ```swift
-import ScreenShield
-
-// Option 1: Use the convenience extension
-view.enableRecordingBlur()
-
-// Option 2: Handle manually with callbacks
-ScreenRecordingObserver.shared.startObserving { isRecording in
-    if isRecording {
-        // Hide or blur sensitive content
-        sensitiveView.isHidden = true
-    } else {
-        // Show sensitive content
-        sensitiveView.isHidden = false
-    }
-}
-
-// Don't forget to stop observing when done
-deinit {
-    ScreenRecordingObserver.shared.stopObserving()
-}
+// Automatically blurs the view when recording starts
+myView.enableRecordingBlur(style: .dark)
 ```
+
+---
+
+### Global Window Protection
+
+For apps that need to secure the entire window hierarchy efficiently:
+
+```swift
+// In your SceneDelegate or AppDelegate
+window?.makeSecure()
+```
+
+---
+
+## Simulator vs. Device
+
+> **Important**: Screenshot protection does **not** work on the iOS Simulator.
+
+The architectural workaround relies on the device's hardware graphics pipeline, which handles secure layers differently than the Simulator's software renderer.
+
+| Environment | Behavior |
+|-------------|----------|
+| **Simulator** | Content will likely remain visible in screenshots |
+| **Real Device** | Content will be hidden/blacked out |
+
+**Always test your implementation on a physical iPhone or iPad.**
+
+---
 
 ## How It Works
 
-### The Secure Field Technique
+ScreenShield leverages a specialized architectural behavior in iOS. When a `UITextField` is set to `isSecureTextEntry = true`, the system creates a secure rendering layer to hide password characters from the OS's screenshot buffer.
 
-iOS does not provide a public API to disable screenshots. However, `UITextField` with `isSecureTextEntry = true` creates an internal layer that is automatically excluded from screenshots and screen recordings (this is how password fields remain secure).
-
-ScreenShield exploits this behavior by:
-
-1. Creating an invisible `UITextField` with `isSecureTextEntry = true`
-2. Attaching your content to the text field's internal secure layer
-3. The content inherits the screenshot protection from the secure layer
+ScreenShield injects your custom views into this secure layer hierarchy, effectively tricking the OS into treating your entire UI as a "password field." This renders it visible to the user but invisible to the screenshot engine.
 
 ```
 UIWindow
  +-- ShieldView
-     +-- UITextField (isSecureTextEntry = true, invisible)
-         +-- layer.sublayers[0] (secure layer)
-             +-- Your Protected Content
+     +-- UITextField (isSecureTextEntry = true)
+         +-- Internal Secure Layer
+             +-- Your Protected Content (invisible to screenshots)
 ```
 
-### Screen Recording Detection
+---
 
-`UIScreen.capturedDidChangeNotification` fires when screen recording or AirPlay mirroring starts/stops. ScreenShield uses this to optionally apply a blur effect during recording as an additional layer of protection.
+## API Reference
 
-## Important Disclaimer
+### SwiftUI Modifiers
 
-> **Warning**: This package relies on undocumented iOS behavior. While the `isSecureTextEntry` technique has been used successfully in production apps and is unlikely to break (as it would affect password field security), Apple could theoretically change this behavior in future iOS versions.
+| Modifier | Description |
+|----------|-------------|
+| `.protectScreenshot()` | Enables protection with default settings. |
+| `.protectScreenshot(_ enabled: Bool)` | Toggles protection based on the boolean. |
+| `.protectScreenshot(when: Bool)` | Alias for the above, for better readability. |
 
-**Recommendations:**
+### ShieldView (UIKit)
 
-- Always test with new iOS releases
-- Use screen recording detection as a backup
-- Consider this one layer of a defense-in-depth security strategy
-- Do not rely solely on this for highly sensitive data
+| Method | Description |
+|--------|-------------|
+| `addProtectedContent(_:)` | Adds a subview to the secure container. |
+| `removeProtectedContent(_:)` | Removes a subview from the secure container. |
+| `setProtected(_:)` | Toggles the secure state. |
+| `isProtected` | Returns the current state. |
+| `contentView` | Access the container for Auto Layout constraints. |
 
-## File Structure
+### Utilities
 
-```
-ScreenShield/
-+-- Package.swift
-+-- README.md
-+-- Sources/
-|   +-- ScreenShield/
-|       +-- ScreenShield.swift          # Public exports and documentation
-|       +-- ShieldView.swift            # Core UIKit implementation
-|       +-- ScreenRecordingObserver.swift # Recording detection
-|       +-- ScreenShieldView.swift      # SwiftUI wrapper
-|       +-- ScreenShieldModifier.swift  # ViewModifier
-+-- Example/
-    +-- ScreenShieldDemo.xcodeproj      # Demo Xcode project
-    +-- ScreenShieldDemo/
-        +-- ScreenShieldDemoApp.swift   # App entry point
-        +-- ContentView.swift           # Demo UI
-        +-- Assets.xcassets/            # App assets
-```
+| Method | Description |
+|--------|-------------|
+| `UIView.enableRecordingBlur()` | Adds an automatic blur effect during screen capture. |
+| `UIWindow.makeSecure()` | Secures the entire window hierarchy. |
+| `ScreenRecordingObserver.shared` | Singleton to listen for recording start/stop events manually. |
+
+---
 
 ## Example App
 
@@ -213,65 +231,32 @@ The repository includes a demo app in the `Example/` folder that showcases all S
 - **Protection Toggle**: Enable/disable protection in real-time
 - **Comparison View**: Side-by-side protected vs unprotected content
 - **Credit Card Demo**: Realistic sensitive data protection example
-- **Testing Instructions**: Step-by-step guide to verify protection
 
 ### Running the Example
 
 1. Open `Example/ScreenShieldDemo.xcodeproj` in Xcode
-2. Select an iOS physical device
+2. Select an iOS Simulator or physical device
 3. Build and Run (Cmd + R)
 4. Take a screenshot to see protection in action
 
-> **Note**: Screenshot protection only works on physical iOS devices. The Simulator may not accurately reflect the protection behavior.
+---
 
-## API Reference
+## Disclaimer
 
-### ShieldView (UIKit)
+> **Warning**: This package relies on `isSecureTextEntry` behavior.
 
-| Method | Description |
-|--------|-------------|
-| `addProtectedContent(_ view: UIView)` | Adds a view to be protected |
-| `removeProtectedContent(_ view: UIView)` | Removes a protected view |
-| `setProtected(_ protected: Bool)` | Enables/disables protection |
-| `isProtected: Bool` | Whether protection is currently enabled |
-| `contentView: UIView` | Access to the container for layout constraints |
+While this approach is widely used in banking and enterprise apps and has been stable for years, it relies on the underlying behavior of iOS's text rendering engine. Apple does not provide a public "Block Screenshot" API.
 
-### ScreenShieldView (SwiftUI)
+**Use this as part of a defense-in-depth security strategy.**
 
-| Parameter | Description |
-|-----------|-------------|
-| `isProtected: Bool` | Whether protection is enabled (default: `true`) |
-| `content: () -> Content` | The content to protect |
-
-### View Extensions (SwiftUI)
-
-| Modifier | Description |
-|----------|-------------|
-| `.protectScreenshot()` | Applies screenshot protection |
-| `.protectScreenshot(when: Bool)` | Conditionally applies protection |
-
-### ScreenRecordingObserver
-
-| Method | Description |
-|--------|-------------|
-| `startObserving(handler:)` | Starts observing recording state |
-| `stopObserving()` | Stops observing |
-| `isScreenBeingCaptured: Bool` | Current recording state |
-
-### UIView Extension
-
-| Method | Description |
-|--------|-------------|
-| `enableRecordingBlur(using:style:)` | Automatically blurs when recording |
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
+---
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Credits
+---
 
-This technique is based on the widely-known `isSecureTextEntry` workaround used by various banking and security-focused iOS applications.
+## License
+
+ScreenShield is released under the **MIT License**. See [LICENSE](LICENSE) for details.
