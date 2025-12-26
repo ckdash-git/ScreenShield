@@ -13,10 +13,15 @@ import SwiftUI
 ///
 /// ## Usage
 /// ```swift
+/// // Always protect
 /// Text("Secret")
 ///     .protectScreenshot()
 ///
-/// // With conditional protection
+/// // Server-controlled protection
+/// Text("Dynamic Secret")
+///     .protectScreenshot(serverConfig.screenshotProtectionEnabled)
+///
+/// // Conditional with named parameter
 /// Text("Maybe Secret")
 ///     .protectScreenshot(when: isSecretMode)
 /// ```
@@ -50,21 +55,31 @@ public extension View {
     /// When applied, the view's content will be hidden (appear blank) when the
     /// user takes a screenshot or records the screen.
     ///
-    /// - Returns: A view with screenshot protection applied.
+    /// - Parameter isEnabled: Whether protection is enabled. Defaults to `true`.
+    ///   Pass `false` to disable protection (e.g., based on server configuration).
+    /// - Returns: A view with screenshot protection applied when enabled.
     ///
     /// ## Example
     /// ```swift
-    /// VStack {
-    ///     Text("Account Number")
-    ///     Text("1234-5678-9012")
-    ///         .protectScreenshot()
-    /// }
+    /// // Always protect
+    /// Text("1234-5678-9012")
+    ///     .protectScreenshot()
+    ///
+    /// // Server-controlled protection
+    /// Text("Sensitive Data")
+    ///     .protectScreenshot(appConfig.isScreenshotProtectionEnabled)
+    ///
+    /// // Disabled protection
+    /// Text("Public Info")
+    ///     .protectScreenshot(false)
     /// ```
-    func protectScreenshot() -> some View {
-        modifier(ScreenShieldModifier(isProtected: true))
+    func protectScreenshot(_ isEnabled: Bool = true) -> some View {
+        modifier(ScreenShieldModifier(isProtected: isEnabled))
     }
     
     /// Conditionally protects this view from screenshots and screen recordings.
+    ///
+    /// This is an alternative syntax using a named parameter for clarity.
     ///
     /// - Parameter condition: When `true`, protection is applied. When `false`,
     ///   the view renders normally and can be captured.
