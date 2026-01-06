@@ -38,16 +38,43 @@ public final class ShieldView: UIView {
     /// Use this to log attempts, show warnings, or take other protective actions.
     public var onScreenshotAttempt: (() -> Void)?
     
+    /// Optional placeholder view shown in screenshots/recordings instead of blank space.
+    ///
+    /// When set, this view will be visible in screenshots and screen recordings while
+    /// the protected content remains hidden. Useful for showing "Content Protected" messages.
+    ///
+    /// ## Example
+    /// ```swift
+    /// let placeholder = UILabel()
+    /// placeholder.text = "Content Protected"
+    /// placeholder.textAlignment = .center
+    /// shieldView.placeholderView = placeholder
+    /// ```
+    public var placeholderView: UIView? {
+        didSet {
+            updatePlaceholderView(oldValue: oldValue)
+        }
+    }
+    
     // MARK: - Private Properties
     
     /// The hidden text field that provides the secure layer.
     private var secureTextField: UITextField?
     
-    /// Container view that holds all protected content.
+    /// Container view that holds all protected content (inside secure layer).
     private let secureContainer: UIView = {
         let view = UIView()
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = true
+        view.clipsToBounds = false
+        return view
+    }()
+    
+    /// Container for placeholder content (outside secure layer - visible in screenshots).
+    private let placeholderContainer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
         view.clipsToBounds = false
         return view
     }()
@@ -71,7 +98,11 @@ public final class ShieldView: UIView {
         backgroundColor = .clear
         clipsToBounds = false
         
-        // Create and setup the secure text field
+        // Add placeholder container FIRST (underneath everything)
+        // This is outside the secure hierarchy, so visible in screenshots
+        addSubview(placeholderContainer)
+        
+        // Create and setup the secure text field (on top)
         makeSecure()
         
         // Observe screenshot notifications
@@ -264,6 +295,28 @@ public final class ShieldView: UIView {
         return deepest
     }
     
+    // MARK: - Placeholder Management
+    
+    /// Updates the placeholder view when it changes.
+    private func updatePlaceholderView(oldValue: UIView?) {
+        // Remove old placeholder
+        oldValue?.removeFromSuperview()
+        
+        // Add new placeholder if provided
+        if let placeholder = placeholderView {
+            placeholder.translatesAutoresizingMaskIntoConstraints = false
+            placeholderContainer.addSubview(placeholder)
+            
+            // Fill the container
+            NSLayoutConstraint.activate([
+                placeholder.topAnchor.constraint(equalTo: placeholderContainer.topAnchor),
+                placeholder.leadingAnchor.constraint(equalTo: placeholderContainer.leadingAnchor),
+                placeholder.trailingAnchor.constraint(equalTo: placeholderContainer.trailingAnchor),
+                placeholder.bottomAnchor.constraint(equalTo: placeholderContainer.bottomAnchor)
+            ])
+        }
+    }
+    
     // MARK: - Layout
     
     public override func layoutSubviews() {
@@ -274,6 +327,9 @@ public final class ShieldView: UIView {
         
         // The secure container should fill the ShieldView bounds
         secureContainer.frame = bounds
+        
+        // Placeholder container also fills bounds (underneath secure content)
+        placeholderContainer.frame = bounds
         
         // Ensure all content is properly sized
         for subview in secureContainer.subviews {
@@ -287,12 +343,14 @@ public final class ShieldView: UIView {
     public override var frame: CGRect {
         didSet {
             secureContainer.frame = bounds
+            placeholderContainer.frame = bounds
         }
     }
     
     public override var bounds: CGRect {
         didSet {
             secureContainer.frame = bounds
+            placeholderContainer.frame = bounds
         }
     }
     
