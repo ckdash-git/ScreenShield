@@ -93,6 +93,31 @@ public extension View {
     func protectScreenshot(when condition: Bool) -> some View {
         modifier(ScreenShieldModifier(isProtected: condition))
     }
+    
+    /// Registers a callback to be invoked when the user takes a screenshot.
+    ///
+    /// This modifier enables global screenshot detection for the app.
+    /// Use it to log attempts, show warnings, or take other protective actions.
+    ///
+    /// - Parameter action: The callback to invoke when a screenshot is taken.
+    /// - Returns: The modified view.
+    ///
+    /// ## Example
+    /// ```swift
+    /// ContentView()
+    ///     .onScreenshotAttempt {
+    ///         showSecurityWarning = true
+    ///         Analytics.log("screenshot_attempted")
+    ///     }
+    /// ```
+    func onScreenshotAttempt(_ action: @escaping () -> Void) -> some View {
+        self.onAppear {
+            ScreenShieldManager.shared.onScreenshotAttempt = action
+        }
+        .onDisappear {
+            ScreenShieldManager.shared.onScreenshotAttempt = nil
+        }
+    }
 }
 
 // MARK: - Background Privacy Modifier

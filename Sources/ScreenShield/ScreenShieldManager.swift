@@ -9,15 +9,18 @@ import UIKit
 /// Manages app-wide screen protection features.
 ///
 /// `ScreenShieldManager` provides centralized control over screen protection features
-/// that apply to the entire app, such as background privacy (App Switcher blurring).
+/// that apply to the entire app, such as background privacy (App Switcher blurring)
+/// and screenshot detection.
 ///
 /// ## Usage
 /// ```swift
 /// // Enable background privacy in AppDelegate or SceneDelegate
 /// ScreenShieldManager.shared.enableBackgroundPrivacy()
 ///
-/// // Or with custom blur style
-/// ScreenShieldManager.shared.enableBackgroundPrivacy(style: .dark)
+/// // Listen for screenshot attempts
+/// ScreenShieldManager.shared.onScreenshotAttempt = {
+///     print("Screenshot detected!")
+/// }
 /// ```
 public final class ScreenShieldManager {
     
@@ -25,6 +28,28 @@ public final class ScreenShieldManager {
     
     /// Shared instance for app-wide configuration.
     public static let shared = ScreenShieldManager()
+    
+    // MARK: - Public Properties
+    
+    /// Callback invoked when the user takes a screenshot.
+    /// Use this for global screenshot detection across the entire app.
+    ///
+    /// ## Example
+    /// ```swift
+    /// ScreenShieldManager.shared.onScreenshotAttempt = {
+    ///     Analytics.log("screenshot_attempt")
+    ///     showSecurityWarning()
+    /// }
+    /// ```
+    public var onScreenshotAttempt: (() -> Void)? {
+        didSet {
+            if onScreenshotAttempt != nil {
+                startScreenshotObserving()
+            } else {
+                stopScreenshotObserving()
+            }
+        }
+    }
     
     // MARK: - Private Properties
     
@@ -40,12 +65,50 @@ public final class ScreenShieldManager {
     /// Whether app is currently in background/inactive state.
     private var isInBackground: Bool = false
     
+    /// Whether screenshot observing is active.
+    private var isScreenshotObservingActive: Bool = false
+    
     // MARK: - Initialization
     
     private init() {}
     
     deinit {
         disableBackgroundPrivacy()
+        stopScreenshotObserving()
+    }
+    
+    // MARK: - Screenshot Detection
+    
+    /// Starts observing screenshot notifications.
+    private func startScreenshotObserving() {
+        guard !isScreenshotObservingActive else { return }
+        isScreenshotObservingActive = true
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidTakeScreenshot),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+    }
+    
+    /// Stops observing screenshot notifications.
+    private func stopScreenshotObserving() {
+        guard isScreenshotObservingActive else { return }
+        isScreenshotObservingActive = false
+        
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+    }
+    
+    /// Called when the user takes a screenshot.
+    @objc private func userDidTakeScreenshot(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onScreenshotAttempt?()
+        }
     }
     
     // MARK: - Background Privacy API

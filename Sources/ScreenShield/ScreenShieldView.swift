@@ -34,16 +34,22 @@ public struct ScreenShieldView<Content: View>: UIViewRepresentable {
     /// Whether protection is enabled.
     private let isProtected: Bool
     
+    /// Callback invoked when the user takes a screenshot.
+    private let onScreenshotAttempt: (() -> Void)?
+    
     /// Creates a new screen shield view with the given content.
     ///
     /// - Parameters:
     ///   - isProtected: Whether protection is enabled. Defaults to `true`.
+    ///   - onScreenshotAttempt: Optional callback when a screenshot is taken.
     ///   - content: A view builder closure that creates the content to protect.
     public init(
         isProtected: Bool = true,
+        onScreenshotAttempt: (() -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.isProtected = isProtected
+        self.onScreenshotAttempt = onScreenshotAttempt
         self.content = content()
     }
     
@@ -69,6 +75,9 @@ public struct ScreenShieldView<Content: View>: UIViewRepresentable {
         // Store references in coordinator
         context.coordinator.shieldView = shieldView
         context.coordinator.hostingController = hostingController
+        
+        // Set screenshot callback
+        shieldView.onScreenshotAttempt = onScreenshotAttempt
         
         // Add hosting view to shield's content view
         shieldView.addProtectedContent(hostingController.view)

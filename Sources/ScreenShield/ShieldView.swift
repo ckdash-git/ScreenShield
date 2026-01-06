@@ -32,6 +32,12 @@ import UIKit
 /// ```
 public final class ShieldView: UIView {
     
+    // MARK: - Public Properties
+    
+    /// Callback invoked when the user takes a screenshot.
+    /// Use this to log attempts, show warnings, or take other protective actions.
+    public var onScreenshotAttempt: (() -> Void)?
+    
     // MARK: - Private Properties
     
     /// The hidden text field that provides the secure layer.
@@ -67,6 +73,32 @@ public final class ShieldView: UIView {
         
         // Create and setup the secure text field
         makeSecure()
+        
+        // Observe screenshot notifications
+        setupScreenshotObserver()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Screenshot Detection
+    
+    /// Sets up observer for screenshot notifications.
+    private func setupScreenshotObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidTakeScreenshot),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+    }
+    
+    /// Called when the user takes a screenshot.
+    @objc private func userDidTakeScreenshot(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onScreenshotAttempt?()
+        }
     }
     
     // MARK: - Secure Layer Setup
