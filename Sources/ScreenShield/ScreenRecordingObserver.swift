@@ -19,13 +19,20 @@ import UIKit
 ///
 /// ## Usage
 /// ```swift
+/// // Simple usage - detect any capture
 /// ScreenRecordingObserver.shared.startObserving { isRecording in
 ///     if isRecording {
 ///         // Apply blur or hide sensitive content
-///     } else {
-///         // Remove blur or show content
 ///     }
 /// }
+///
+/// // Advanced usage - differentiate between recording and external display
+/// ScreenRecordingObserver.shared.startObservingWithDetail(
+///     onRecordingStarted: { print("Recording started") },
+///     onRecordingStopped: { print("Recording stopped") },
+///     onExternalDisplayConnected: { print("AirPlay/External display connected") },
+///     onExternalDisplayDisconnected: { print("External display disconnected") }
+/// )
 /// ```
 ///
 /// - Important: Always call `stopObserving()` when you no longer need
@@ -44,13 +51,34 @@ public final class ScreenRecordingObserver {
     /// - Parameter isRecording: `true` if screen is being captured, `false` otherwise.
     public typealias RecordingStateHandler = (_ isRecording: Bool) -> Void
     
+    /// Callback type for specific events (no parameters).
+    public typealias EventHandler = () -> Void
+    
     // MARK: - Private Properties
     
-    /// The current recording state handler.
+    /// The current recording state handler (simple API).
     private var stateHandler: RecordingStateHandler?
+    
+    /// Handler called when recording starts.
+    private var onRecordingStarted: EventHandler?
+    
+    /// Handler called when recording stops.
+    private var onRecordingStopped: EventHandler?
+    
+    /// Handler called when external display is connected.
+    private var onExternalDisplayConnected: EventHandler?
+    
+    /// Handler called when external display is disconnected.
+    private var onExternalDisplayDisconnected: EventHandler?
     
     /// Whether we're currently observing.
     private var isObserving: Bool = false
+    
+    /// Tracks the previous external display state.
+    private var wasExternalDisplayConnected: Bool = false
+    
+    /// Tracks the previous recording state.
+    private var wasRecording: Bool = false
     
     // MARK: - Initialization
     
@@ -60,7 +88,7 @@ public final class ScreenRecordingObserver {
         stopObserving()
     }
     
-    // MARK: - Public API
+    // MARK: - Simple Public API
     
     /// Starts observing screen recording state changes.
     ///
@@ -102,12 +130,91 @@ public final class ScreenRecordingObserver {
         
         isObserving = false
         stateHandler = nil
+        onRecordingStarted = nil
+        onRecordingStopped = nil
+        onExternalDisplayConnected = nil
+        onExternalDisplayDisconnected = nil
         
         NotificationCenter.default.removeObserver(
             self,
             name: UIScreen.capturedDidChangeNotification,
             object: nil
         )
+        
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIScreen.didConnectNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIScreen.didDisconnectNotification,
+            object: nil
+        )
+    }
+    
+    // MARK: - Advanced Public API
+    
+    /// Starts observing with separate callbacks for recording and external display events.
+    ///
+    /// This provides more granular control over how your app responds to different
+    /// types of screen capture scenarios.
+    ///
+    /// - Parameters:
+    ///   - onRecordingStarted: Called when screen recording begins.
+    ///   - onRecordingStopped: Called when screen recording ends.
+    ///   - onExternalDisplayConnected: Called when an external display (AirPlay, CarPlay) connects.
+    ///   - onExternalDisplayDisconnected: Called when an external display disconnects.
+    public func startObservingWithDetail(
+        onRecordingStarted: EventHandler? = nil,
+        onRecordingStopped: EventHandler? = nil,
+        onExternalDisplayConnected: EventHandler? = nil,
+        onExternalDisplayDisconnected: EventHandler? = nil
+    ) {
+        self.onRecordingStarted = onRecordingStarted
+        self.onRecordingStopped = onRecordingStopped
+        self.onExternalDisplayConnected = onExternalDisplayConnected
+        self.onExternalDisplayDisconnected = onExternalDisplayDisconnected
+        
+        // Initialize state tracking
+        wasExternalDisplayConnected = hasExternalDisplay
+        wasRecording = isRecordingOnly
+        
+        // Avoid duplicate observers
+        if isObserving {
+            // Fire initial events if already in a capture state
+            notifyInitialState()
+            return
+        }
+        
+        isObserving = true
+        
+        // Register for screen capture notification
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenCapturedDidChange),
+            name: UIScreen.capturedDidChangeNotification,
+            object: nil
+        )
+        
+        // Register for screen connect/disconnect notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenDidConnect),
+            name: UIScreen.didConnectNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenDidDisconnect),
+            name: UIScreen.didDisconnectNotification,
+            object: nil
+        )
+        
+        // Fire initial events
+        notifyInitialState()
     }
     
     /// Returns whether the screen is currently being captured.
@@ -117,15 +224,86 @@ public final class ScreenRecordingObserver {
         return UIScreen.main.isCaptured
     }
     
+    /// Returns whether an external display is connected.
+    ///
+    /// This includes AirPlay mirroring, CarPlay, and physical external displays.
+    public var hasExternalDisplay: Bool {
+        return UIScreen.screens.count > 1
+    }
+    
+    /// Returns whether the screen is being recorded (not including external displays).
+    ///
+    /// This differentiates between screen recording and AirPlay/external display mirroring.
+    public var isRecordingOnly: Bool {
+        return UIScreen.main.isCaptured && !hasExternalDisplay
+    }
+    
+    /// Returns whether content is being mirrored to an external display.
+    ///
+    /// This is `true` when there's an external display connected AND the main screen is captured.
+    public var isMirroringToExternalDisplay: Bool {
+        return UIScreen.main.isCaptured && hasExternalDisplay
+    }
+    
     // MARK: - Private Methods
+    
+    /// Notifies handlers of the initial state.
+    private func notifyInitialState() {
+        if isRecordingOnly {
+            onRecordingStarted?()
+        }
+        if hasExternalDisplay {
+            onExternalDisplayConnected?()
+        }
+    }
     
     /// Called when the screen capture state changes.
     @objc private func screenCapturedDidChange(_ notification: Notification) {
         let isRecording = UIScreen.main.isCaptured
+        let isExternal = hasExternalDisplay
         
         // Notify on main thread to ensure UI updates are safe
         DispatchQueue.main.async { [weak self] in
-            self?.stateHandler?(isRecording)
+            guard let self = self else { return }
+            
+            // Simple API handler
+            self.stateHandler?(isRecording)
+            
+            // Advanced API handlers
+            let isNowRecording = isRecording && !isExternal
+            
+            // Check if recording state changed
+            if isNowRecording && !self.wasRecording {
+                self.onRecordingStarted?()
+            } else if !isNowRecording && self.wasRecording {
+                self.onRecordingStopped?()
+            }
+            
+            self.wasRecording = isNowRecording
+        }
+    }
+    
+    /// Called when a screen is connected.
+    @objc private func screenDidConnect(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if !self.wasExternalDisplayConnected && self.hasExternalDisplay {
+                self.wasExternalDisplayConnected = true
+                self.onExternalDisplayConnected?()
+            }
+        }
+    }
+    
+    /// Called when a screen is disconnected.
+    @objc private func screenDidDisconnect(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if self.wasExternalDisplayConnected && !self.hasExternalDisplay {
+                self.wasExternalDisplayConnected = false
+                self.onExternalDisplayDisconnected?()
+            }
         }
     }
 }
