@@ -15,8 +15,13 @@ ScreenShield is a production-ready Swift Package that prevents sensitive content
 
 - **Screenshot Prevention**: Content rendered inside ScreenShield becomes invisible (black/white) in system screenshots.
 - **Recording Protection**: Content is automatically hidden during screen recording or AirPlay mirroring.
+- **App Switcher Privacy** *(New in 1.3.0)*: Blur overlay when app enters background to protect App Switcher snapshots.
+- **Screenshot Notifications** *(New in 1.3.0)*: Callback when user takes a screenshot for logging or alerts.
+- **Placeholder Content** *(New in 1.3.0)*: Show custom "Content Protected" view in screenshots instead of blank space.
+- **External Display Detection** *(New in 1.3.0)*: Differentiate between screen recording and AirPlay/external displays.
 - **Dynamic Control**: Toggle protection on or off dynamically (e.g., via server-side configuration).
 - **Privacy Blur**: Optional utility to automatically blur views when screen recording is detected.
+- **Accessibility Support** *(Enhanced in 1.3.0)*: VoiceOver-friendly implementation.
 - **Modular Design**: Zero dependencies; install via Swift Package Manager.
 - **SwiftUI & UIKit**: First-class support for both frameworks.
 
@@ -30,13 +35,13 @@ Add ScreenShield to your project via Xcode:
 
 1. Go to **File > Add Package Dependencies...**
 2. Enter the repository URL: `https://github.com/ckdash-git/ScreenShield.git`
-3. Select **Up to Next Major Version** (e.g., `1.2.6`).
+3. Select **Up to Next Major Version** (e.g., `1.3.0`).
 
 Or add it to your `Package.swift` dependencies:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ckdash-git/ScreenShield.git", from: "1.2.6")
+    .package(url: "https://github.com/ckdash-git/ScreenShield.git", from: "1.3.0")
 ]
 ```
 
@@ -235,6 +240,76 @@ window?.makeSecure()
 
 ---
 
+## New in Version 1.3.0
+
+### App Switcher Privacy (Background Blur)
+
+Protect your app's content from appearing in the iOS App Switcher:
+
+```swift
+// SwiftUI - Add to your root view
+ContentView()
+    .enableBackgroundPrivacy(style: .regular)
+
+// UIKit - In AppDelegate or SceneDelegate
+ScreenShieldManager.shared.enableBackgroundPrivacy(style: .dark)
+```
+
+### Screenshot Attempt Notifications
+
+Get notified when users take screenshots:
+
+```swift
+// SwiftUI
+ContentView()
+    .onScreenshotAttempt {
+        showSecurityWarning = true
+    }
+
+// UIKit
+shieldView.onScreenshotAttempt = {
+    print("Screenshot detected!")
+}
+
+// Global (App-wide)
+ScreenShieldManager.shared.onScreenshotAttempt = {
+    Analytics.log("screenshot_attempt")
+}
+```
+
+### Placeholder Content
+
+Show custom content in screenshots instead of blank space:
+
+```swift
+let placeholder = UILabel()
+placeholder.text = "🔒 Content Protected"
+placeholder.textAlignment = .center
+
+shieldView.placeholderView = placeholder
+```
+
+### Enhanced External Display Detection
+
+Differentiate between screen recording and AirPlay mirroring:
+
+```swift
+// Check current state
+ScreenRecordingObserver.shared.hasExternalDisplay      // AirPlay/CarPlay connected?
+ScreenRecordingObserver.shared.isRecordingOnly         // Recording without external display?
+ScreenRecordingObserver.shared.isMirroringToExternalDisplay  // Mirroring to external?
+
+// Observe with separate callbacks
+ScreenRecordingObserver.shared.startObservingWithDetail(
+    onRecordingStarted: { print("Recording started") },
+    onRecordingStopped: { print("Recording stopped") },
+    onExternalDisplayConnected: { print("AirPlay connected") },
+    onExternalDisplayDisconnected: { print("AirPlay disconnected") }
+)
+```
+
+---
+
 ## Simulator vs. Device
 
 > **Important**: Screenshot protection does **not** work on the iOS Simulator.
@@ -293,6 +368,24 @@ UIWindow
 | `UIView.enableRecordingBlur()` | Adds an automatic blur effect during screen capture. |
 | `UIWindow.makeSecure()` | Secures the entire window hierarchy. |
 | `ScreenRecordingObserver.shared` | Singleton to listen for recording start/stop events manually. |
+
+### ScreenShieldManager (New in 1.3.0)
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `enableBackgroundPrivacy(style:)` | Enables blur when app enters background. |
+| `disableBackgroundPrivacy()` | Disables background blur. |
+| `onScreenshotAttempt` | Closure called when screenshot is taken. |
+| `isBackgroundPrivacyActive` | Returns whether background privacy is enabled. |
+
+### ScreenRecordingObserver (Enhanced in 1.3.0)
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `startObservingWithDetail(...)` | Separate callbacks for recording vs external display. |
+| `hasExternalDisplay` | Whether an external display is connected. |
+| `isRecordingOnly` | Whether recording without external display. |
+| `isMirroringToExternalDisplay` | Whether mirroring to external display. |
 
 ---
 
