@@ -155,20 +155,39 @@ public final class ShieldView: UIView {
         textField.setNeedsLayout()
         textField.layoutIfNeeded()
         
-        // Search recursively for the canvas view
-        return findCanvasView(in: textField)
+        // Strategy 1: Search for canvas view by class name patterns
+        if let canvasView = findCanvasView(in: textField) {
+            return canvasView
+        }
+        
+        // Strategy 2: Look for views with specific secure layer properties
+        if let secureLayerView = findViewWithSecureLayerProperties(in: textField) {
+            return secureLayerView
+        }
+        
+        // Strategy 3: Fallback to the deepest subview (often the canvas)
+        if let deepestView = findDeepestSubview(in: textField) {
+            return deepestView
+        }
+        
+        // Strategy 4: Ultimate fallback - use first subview
+        return textField.subviews.first
     }
     
-    /// Recursively searches for the canvas view in the view hierarchy.
+    /// Recursively searches for the canvas view in the view hierarchy using class name patterns.
     private func findCanvasView(in view: UIView) -> UIView? {
         for subview in view.subviews {
             let className = String(describing: type(of: subview))
             
             // iOS uses various internal view classes for secure text
-            // Common ones: _UITextLayoutCanvasView, _UITextFieldCanvasView
+            // Known patterns across iOS versions:
+            // - _UITextLayoutCanvasView (iOS 13+)
+            // - _UITextFieldCanvasView (older iOS)
+            // - _UITextFieldContentView
+            // - UITextEffectsWindow related views
             if className.contains("Canvas") ||
                className.contains("TextLayout") ||
-               className.contains("ContentView") {
+               className.hasPrefix("_UITextField") && className.contains("Content") {
                 return subview
             }
             
@@ -178,9 +197,71 @@ public final class ShieldView: UIView {
             }
         }
         
-        // If no specific canvas found, return the first subview
-        // This is often correct on newer iOS versions
-        return view.subviews.first
+        return nil
+    }
+    
+    /// Searches for views that have layer properties indicative of secure rendering.
+    /// iOS marks secure content layers with specific properties.
+    private func findViewWithSecureLayerProperties(in view: UIView) -> UIView? {
+        for subview in view.subviews {
+            // Check for layer properties that indicate secure rendering:
+            // 1. Layer has contents that are protected
+            // 2. Layer has specific name patterns
+            // 3. Layer is marked for secure content (internal flag)
+            
+            let layer = subview.layer
+            
+            // Check layer name for secure indicators
+            if let layerName = layer.name {
+                if layerName.contains("secure") || 
+                   layerName.contains("protected") ||
+                   layerName.contains("mask") {
+                    return subview
+                }
+            }
+            
+            // Check if this is a CALayer subclass used for secure rendering
+            let layerClassName = String(describing: type(of: layer))
+            if layerClassName.contains("SecureLayer") ||
+               layerClassName.contains("TextLayer") {
+                return subview
+            }
+            
+            // Check for empty backgroundColor with non-empty sublayers
+            // Secure content views often have this pattern
+            if subview.backgroundColor == nil && 
+               !layer.sublayers.isNilOrEmpty &&
+               subview.subviews.isEmpty {
+                return subview
+            }
+            
+            // Recursively search
+            if let found = findViewWithSecureLayerProperties(in: subview) {
+                return found
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Finds the deepest subview in the hierarchy.
+    /// The canvas view is typically deep in the view hierarchy.
+    private func findDeepestSubview(in view: UIView) -> UIView? {
+        var deepest: UIView? = nil
+        var maxDepth = 0
+        
+        func traverse(_ current: UIView, depth: Int) {
+            if current.subviews.isEmpty && depth > maxDepth {
+                maxDepth = depth
+                deepest = current
+            }
+            for subview in current.subviews {
+                traverse(subview, depth: depth + 1)
+            }
+        }
+        
+        traverse(view, depth: 0)
+        return deepest
     }
     
     // MARK: - Layout
@@ -313,5 +394,19 @@ public extension UIWindow {
         ])
         
         return shieldView
+    }
+}
+
+// MARK: - Private Extensions
+
+private extension Optional where Wrapped: Collection {
+    /// Returns true if the optional is nil or the collection is empty.
+    var isNilOrEmpty: Bool {
+        switch self {
+        case .none:
+            return true
+        case .some(let collection):
+            return collection.isEmpty
+        }
     }
 }
