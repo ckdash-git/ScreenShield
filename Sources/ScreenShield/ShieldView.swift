@@ -67,6 +67,9 @@ public final class ShieldView: UIView {
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = true
         view.clipsToBounds = false
+        // Make this an accessibility container so VoiceOver can access child elements
+        view.isAccessibilityElement = false
+        view.accessibilityContainerType = .semanticGroup
         return view
     }()
     
@@ -145,6 +148,11 @@ public final class ShieldView: UIView {
         textField.isUserInteractionEnabled = false
         textField.clipsToBounds = false
         textField.layer.masksToBounds = false
+        
+        // IMPORTANT: Disable accessibility on the text field to prevent VoiceOver confusion
+        // The text field is only used for its secure layer, not for user input
+        textField.isAccessibilityElement = false
+        textField.accessibilityElementsHidden = true
         
         // Add textfield to view hierarchy
         addSubview(textField)
