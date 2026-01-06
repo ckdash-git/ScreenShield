@@ -64,6 +64,7 @@ import SwiftUI
 // - ScreenShieldView (SwiftUI)
 // - ScreenShieldModifier (SwiftUI ViewModifier)
 // - ScreenRecordingObserver (Recording detection)
+// - ScreenShieldManager (Background privacy & app-wide settings)
 
 // MARK: - Version Information
 

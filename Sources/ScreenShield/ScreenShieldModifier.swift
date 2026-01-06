@@ -94,3 +94,79 @@ public extension View {
         modifier(ScreenShieldModifier(isProtected: condition))
     }
 }
+
+// MARK: - Background Privacy Modifier
+
+/// A ViewModifier that enables background privacy protection.
+///
+/// This modifier automatically enables/disables background privacy when the view appears/disappears.
+@available(iOS 13.0, *)
+public struct BackgroundPrivacyModifier: ViewModifier {
+    
+    /// The blur style to use.
+    private let style: UIBlurEffect.Style
+    
+    /// Whether background privacy is enabled.
+    private let isEnabled: Bool
+    
+    /// Creates a new background privacy modifier.
+    ///
+    /// - Parameters:
+    ///   - isEnabled: Whether to enable background privacy. Defaults to `true`.
+    ///   - style: The blur effect style. Defaults to `.regular`.
+    public init(isEnabled: Bool = true, style: UIBlurEffect.Style = .regular) {
+        self.isEnabled = isEnabled
+        self.style = style
+    }
+    
+    public func body(content: Content) -> some View {
+        content
+            .onAppear {
+                if isEnabled {
+                    ScreenShieldManager.shared.enableBackgroundPrivacy(style: style)
+                }
+            }
+            .onDisappear {
+                if isEnabled {
+                    ScreenShieldManager.shared.disableBackgroundPrivacy()
+                }
+            }
+    }
+}
+
+// MARK: - Background Privacy View Extension
+
+@available(iOS 13.0, *)
+public extension View {
+    
+    /// Enables background privacy protection for the app.
+    ///
+    /// When the app enters the background, a blur overlay is applied to hide
+    /// sensitive content from the iOS App Switcher.
+    ///
+    /// - Parameters:
+    ///   - isEnabled: Whether to enable background privacy. Defaults to `true`.
+    ///   - style: The blur effect style. Defaults to `.regular`.
+    /// - Returns: A view with background privacy enabled.
+    ///
+    /// ## Example
+    /// ```swift
+    /// ContentView()
+    ///     .enableBackgroundPrivacy()
+    ///
+    /// // With dark blur
+    /// ContentView()
+    ///     .enableBackgroundPrivacy(style: .dark)
+    ///
+    /// // Conditionally enabled
+    /// ContentView()
+    ///     .enableBackgroundPrivacy(appSettings.privacyEnabled, style: .regular)
+    /// ```
+    func enableBackgroundPrivacy(
+        _ isEnabled: Bool = true,
+        style: UIBlurEffect.Style = .regular
+    ) -> some View {
+        modifier(BackgroundPrivacyModifier(isEnabled: isEnabled, style: style))
+    }
+}
+
