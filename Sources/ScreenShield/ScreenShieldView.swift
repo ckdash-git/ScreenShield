@@ -57,9 +57,17 @@ public struct ScreenShieldView<Content: View>: UIViewRepresentable {
     
     public func makeUIView(context: Context) -> UIView {
         // Create container view to hold everything
-        let containerView = UIView()
+        let containerView = SafeAreaObservingView()
         containerView.backgroundColor = .clear
         containerView.clipsToBounds = false
+        
+        // Propagate safe area insets to the hosting controller
+        // This is necessary because views inside the secure text field hierarchy
+        // do not strictly inherit safe area insets from the window.
+        let coordinator = context.coordinator
+        containerView.onSafeAreaInsetsDidChange = { [weak coordinator] insets in
+            coordinator?.hostingController?.additionalSafeAreaInsets = insets
+        }
         
         // Create ShieldView
         let shieldView = ShieldView()
@@ -149,3 +157,14 @@ struct ScreenShieldView_Previews: PreviewProvider {
     }
 }
 #endif
+
+// MARK: - Internal Helpers
+
+private class SafeAreaObservingView: UIView {
+    var onSafeAreaInsetsDidChange: ((UIEdgeInsets) -> Void)?
+    
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        onSafeAreaInsetsDidChange?(safeAreaInsets)
+    }
+}
