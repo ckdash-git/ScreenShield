@@ -37,10 +37,18 @@ struct ContentView: View {
             }
             .navigationTitle("ScreenShield Demo")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingAlert = true }) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingAlert = true
+                    } label: {
                         Image(systemName: "info.circle")
                     }
+                    .foregroundStyle(.primary)
+                }
+                
+                ToolbarItem(placement: .topBarTrailing) {
+                    Image(systemName: "gear")
+                        .foregroundStyle(.primary)
                 }
             }
             .alert("About ScreenShield", isPresented: $showingAlert) {
